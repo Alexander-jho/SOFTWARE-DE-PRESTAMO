@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { doc, getDoc, setDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, addDoc, collection } from 'firebase/firestore';
 import { db } from '../lib/firebase';
-import { Loan, AppConfig, MoraConfig } from '../types';
+import { Loan, AppConfig } from '../types';
 import { calculateTotalToPay } from '../lib/finance';
-import { ChevronLeft, Save, Info, Calendar } from 'lucide-react';
+import { ChevronLeft, Save, Info, Calendar, Camera, X } from 'lucide-react';
 import { addDays, format } from 'date-fns';
+import { CameraCapture } from '../components/CameraCapture';
 
 const DEFAULT_CONFIG: AppConfig = {
   availableRates: [6, 10, 20],
@@ -21,6 +22,7 @@ export function LoanForm() {
   
   const [formData, setFormData] = useState({
     clientName: '',
+    clientPhoto: '',
     principal: 0,
     interestRate: 10,
     startDate: format(new Date(), 'yyyy-MM-dd'),
@@ -28,6 +30,8 @@ export function LoanForm() {
     moraType: 'daily' as 'fixed' | 'daily',
     moraValue: 5000,
   });
+
+  const [showCamera, setShowCamera] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -51,6 +55,7 @@ export function LoanForm() {
           const l = loanDoc.data() as Loan;
           setFormData({
             clientName: l.clientName,
+            clientPhoto: l.clientPhoto || '',
             principal: l.principal,
             interestRate: l.interestRate,
             startDate: l.startDate.split('T')[0],
@@ -73,6 +78,7 @@ export function LoanForm() {
     
     const loanData: any = {
       clientName: formData.clientName,
+      clientPhoto: formData.clientPhoto,
       principal: Number(formData.principal),
       interestRate: Number(formData.interestRate),
       startDate: new Date(formData.startDate).toISOString(),
@@ -117,17 +123,49 @@ export function LoanForm() {
 
       <form onSubmit={handleSubmit} className="bg-white p-8 rounded-3xl border border-gray-100 shadow-sm space-y-8">
         {/* Client Info */}
-        <div className="space-y-4">
-          <label className="block text-sm font-bold text-gray-700 uppercase tracking-widest">Información del Cliente</label>
-          <input 
-            required
-            type="text"
-            placeholder="Nombre completo del cliente"
-            value={formData.clientName}
-            onChange={e => setFormData({ ...formData, clientName: e.target.value })}
-            className="w-full px-4 py-3 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-          />
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <label className="block text-sm font-bold text-gray-700 uppercase tracking-widest">Información del Cliente</label>
+            <button 
+              type="button"
+              onClick={() => setShowCamera(true)}
+              className="flex items-center gap-2 text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors uppercase tracking-widest"
+            >
+              <Camera className="w-4 h-4" />
+              {formData.clientPhoto ? 'Cambiar Foto' : 'Tomar Foto'}
+            </button>
+          </div>
+
+          <div className="flex flex-col md:flex-row gap-6 items-start">
+            {formData.clientPhoto && (
+              <div className="relative group shrink-0">
+                 <img src={formData.clientPhoto} alt="Client" className="w-24 h-32 rounded-2xl object-cover border-2 border-gray-100 shadow-sm" />
+                 <button 
+                  type="button"
+                  onClick={() => setFormData({ ...formData, clientPhoto: '' })}
+                  className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                 >
+                   <X className="w-3 h-3" />
+                 </button>
+              </div>
+            )}
+            <input 
+              required
+              type="text"
+              placeholder="Nombre completo del cliente"
+              value={formData.clientName}
+              onChange={e => setFormData({ ...formData, clientName: e.target.value })}
+              className="w-full px-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500 transition-all font-bold text-lg"
+            />
+          </div>
         </div>
+
+        {showCamera && (
+          <CameraCapture 
+            onCapture={(photo) => setFormData({ ...formData, clientPhoto: photo })}
+            onClose={() => setShowCamera(false)}
+          />
+        )}
 
         {/* Financial Info */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -8,6 +8,7 @@ export interface MoraConfig {
 export interface Loan {
   id: string;
   clientName: string;
+  clientPhoto?: string;
   principal: number;
   interestRate: number;
   totalToPay: number;

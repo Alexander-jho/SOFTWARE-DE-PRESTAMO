@@ -4,7 +4,7 @@ import { doc, onSnapshot, updateDoc, collection, addDoc, deleteDoc, runTransacti
 import { db } from '../lib/firebase';
 import { Loan, Payment } from '../types';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
-import { ChevronLeft, Trash2, Printer, CreditCard, History, Plus, AlertTriangle, Calendar, User, Edit } from 'lucide-react';
+import { ChevronLeft, Trash2, Printer, CreditCard, History, Plus, AlertTriangle, Calendar, User, Edit, FileCheck } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { syncLoanStatus } from '../lib/finance';
 import { differenceInDays } from 'date-fns';
@@ -107,6 +107,67 @@ export function LoanDetail() {
     }
   };
 
+  const handlePrintPazYSalvo = () => {
+    if (!loan || loan.status !== 'paid') return;
+    
+    const content = `
+      <html>
+        <head>
+          <title>PAZ Y SALVO - ${loan.clientName}</title>
+          <style>
+            body { font-family: 'Inter', sans-serif; padding: 60px; color: #1a1a1a; line-height: 1.6; }
+            .container { max-width: 700px; margin: auto; border: 1px solid #eee; padding: 40px; border-radius: 8px; }
+            .header { text-align: center; margin-bottom: 50px; }
+            .header h1 { margin: 0; font-size: 28px; letter-spacing: 2px; }
+            .content { text-align: justify; margin-bottom: 60px; }
+            .details { margin: 30px 0; padding: 20px; background: #f9f9f9; border-radius: 8px; }
+            .signature { margin-top: 100px; display: flex; justify-content: space-between; gap: 40px; }
+            .sig-box { border-top: 1px solid #000; width: 250px; text-align: center; padding-top: 10px; }
+            .date { margin-bottom: 40px; text-align: right; font-style: italic; }
+            .photo-box { text-align: center; margin-bottom: 30px; }
+            .photo-box img { width: 120px; height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid #ddd; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>PAZ Y SALVO</h1>
+              <p>PRESTAFÁCIL - SERVICIOS FINANCIEROS</p>
+            </div>
+            
+            <p class="date">Fecha de expedición: ${new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            
+            <div class="photo-box">
+              ${loan.clientPhoto ? `<img src="${loan.clientPhoto}" />` : ''}
+            </div>
+
+            <div class="content">
+              Se hace constar que el señor(a) <strong>${loan.clientName.toUpperCase()}</strong>, identificado económicamente con la referencia de préstamo <strong>${loan.id.toUpperCase()}</strong>, se encuentra a la fecha en <strong>PAZ Y SALVO</strong> por concepto de capital, intereses y recargos derivados del crédito otorgado el día ${formatDate(loan.startDate)}.
+              <br><br>
+              A la presente fecha, la obligación ha sido satisfecha en su totalidad, no existiendo saldos pendientes de ninguna naturaleza.
+            </div>
+
+            <div class="details">
+              <strong>DATOS DEL CRÉDITO:</strong><br>
+              Capital Inicial: ${formatCurrency(loan.principal)}<br>
+              Total Liquidado: ${formatCurrency(loan.totalPaid)}<br>
+              Fecha de Finalización: ${formatDate(new Date().toISOString())}
+            </div>
+
+            <div class="signature">
+               <div class="sig-box">FIRMA ADMINISTRADOR</div>
+               <div class="sig-box">FIRMA BENEFICIARIO</div>
+            </div>
+          </div>
+          <script>window.print();</script>
+        </body>
+      </html>
+    `;
+    const win = window.open('', '_blank');
+    win?.document.write(content);
+    win?.document.close();
+  };
+
   const handlePrintReceipt = (payment?: Payment) => {
      // Simple print window for receipt
      const content = `
@@ -156,6 +217,13 @@ export function LoanDetail() {
           <button onClick={() => navigate('/loans')} className="p-2 hover:bg-gray-100 rounded-xl transition-colors">
             <ChevronLeft className="w-6 h-6 text-gray-500" />
           </button>
+          
+          {loan.clientPhoto && (
+            <div className="w-16 h-16 rounded-2xl overflow-hidden shadow-md border-2 border-white shrink-0">
+               <img src={loan.clientPhoto} alt={loan.clientName} className="w-full h-full object-cover" />
+            </div>
+          )}
+
           <div>
             <h2 className="text-3xl font-bold tracking-tight">{loan.clientName}</h2>
             <div className="flex items-center gap-2 mt-1">
@@ -333,14 +401,34 @@ export function LoanDetail() {
 
           <div className="bg-gray-900 rounded-3xl p-6 text-white overflow-hidden relative">
              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Guía del Cobrador</p>
-             <h4 className="text-xl font-bold mt-2">Días Transcurridos</h4>
-             <p className="text-4xl font-black mt-4 ml-1">
-               {Math.max(0, differenceInDays(new Date(), new Date(loan.startDate)))}
-               <span className="text-lg font-light ml-2 text-gray-400">días</span>
-             </p>
-             <div className="mt-6 flex gap-2">
-                <span className="px-2 py-1 bg-white/10 rounded-lg text-[10px] font-bold">Iniciado: {new Date(loan.startDate).toLocaleDateString()}</span>
-             </div>
+             
+             {loan.status === 'paid' ? (
+               <div className="mt-4 space-y-4 relative z-10">
+                 <div className="flex items-center gap-2 text-green-400">
+                    <FileCheck className="w-6 h-6" />
+                    <span className="font-bold">Préstamo Finalizado</span>
+                 </div>
+                 <p className="text-sm text-gray-400">Este cliente ha cumplido con todas sus obligaciones.</p>
+                 <button 
+                  onClick={handlePrintPazYSalvo}
+                  className="w-full py-3 bg-white text-gray-900 rounded-xl font-bold text-sm hover:bg-gray-100 transition-colors flex items-center justify-center gap-2"
+                 >
+                    Generar Paz y Salvo
+                 </button>
+               </div>
+             ) : (
+               <>
+                 <h4 className="text-xl font-bold mt-2">Días Transcurridos</h4>
+                 <p className="text-4xl font-black mt-4 ml-1">
+                   {Math.max(0, differenceInDays(new Date(), new Date(loan.startDate)))}
+                   <span className="text-lg font-light ml-2 text-gray-400">días</span>
+                 </p>
+                 <div className="mt-6 flex gap-2">
+                    <span className="px-2 py-1 bg-white/10 rounded-lg text-[10px] font-bold">Iniciado: {new Date(loan.startDate).toLocaleDateString()}</span>
+                 </div>
+               </>
+             )}
+             
              <div className="absolute top-0 right-0 p-4 opacity-10">
                 <User className="w-24 h-24" />
              </div>
