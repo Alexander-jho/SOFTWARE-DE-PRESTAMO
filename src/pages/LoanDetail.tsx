@@ -9,11 +9,13 @@ import { motion, AnimatePresence } from 'motion/react';
 import { syncLoanStatus } from '../lib/finance';
 import { differenceInDays } from 'date-fns';
 
-import { query as fbQuery, orderBy as fbOrderBy } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
+import { query as fbQuery, orderBy as fbOrderBy, where as fbWhere } from 'firebase/firestore';
 
 export function LoanDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [loan, setLoan] = useState<Loan | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,12 +24,12 @@ export function LoanDetail() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id || !user) return;
     
     const unsubscribeLoan = onSnapshot(doc(db, 'loans', id), (doc) => {
       if (doc.exists()) {
         const l = { id: doc.id, ...doc.data() } as Loan;
-        // Sync local view (mora/status)
+        // Check local ownership if needed, but rules handle it
         setLoan({ ...l, ...syncLoanStatus(l) });
       } else {
         navigate('/loans');
@@ -35,20 +37,26 @@ export function LoanDetail() {
       setLoading(false);
     });
 
-    const q = fbQuery(collection(db, `loans/${id}/payments`), fbOrderBy('date', 'desc'));
+    const q = fbQuery(
+      collection(db, `loans/${id}/payments`), 
+      fbWhere('ownerId', '==', user.uid),
+      fbOrderBy('date', 'desc')
+    );
     const unsubscribePayments = onSnapshot(q, (snapshot) => {
       const paymentData = snapshot.docs.map((d) => ({
         id: d.id,
         ...d.data()
       })) as Payment[];
       setPayments(paymentData);
+    }, (error) => {
+      console.error("Payments snapshot error:", error);
     });
 
     return () => {
       unsubscribeLoan();
       unsubscribePayments();
     };
-  }, [id, navigate]);
+  }, [id, navigate, user]);
 
   const handleAddPayment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -82,6 +90,7 @@ export function LoanDetail() {
         const paymentRef = doc(collection(db, `loans/${id}/payments`));
         transaction.set(paymentRef, {
           loanId: id,
+          ownerId: auth.currentUser?.uid,
           amount: paymentAmount,
           date: new Date().toISOString(),
           notes: paymentNotes

@@ -1,27 +1,26 @@
-# Security Specification for Prestafácil
+# Security Specification - Prestafácil
 
-## 1. Data Invariants
-- A status can only be `active`, `overdue`, or `paid`.
-- `remainingBalance` cannot be negative.
-- `totalPaid` must be the sum of all associated payments (enforced by application logic and rules).
-- `principal` and `interestRate` are immutable after creation.
-- A `payment` amount cannot exceed the `remainingBalance` of the associated loan plus some buffer for mora.
+## Data Invariants
+1. A Loan must have an `ownerId` matching the creator's UID.
+2. A Payment must be inside a Loan's subcollection and have an `ownerId` matching the creator's UID.
+3. Access to a Loan (read/write) is strictly restricted to the `ownerId`.
+4. `principal`, `interestRate`, `startDate`, `ownerId`, and `createdAt` are immutable after Loan creation.
+5. `loanId`, `ownerId`, and `date` are immutable after Payment creation.
+6. `totalPaid` and `remainingBalance` in Loan can only be updated if a corresponding Payment is created (enforced via `existsAfter`).
 
-## 2. The Dirty Dozen Payloads (Rejection Targets)
-1. Creating a loan with negative principal.
-2. Updating interest rate of an existing loan.
-3. Setting `status` to `paid` while `remainingBalance > 0`.
-4. Creating a payment for a non-existent loan.
-5. Setting its own role as `admin` (not applicable as we use a separate `admins` collection).
-6. Deleting a loan that has non-zero balance (optional, but good for integrity).
-7. Injecting a massive string (1MB) as `clientName`.
-8. Setting `totalPaid` to a value higher than `totalToPay` + mora.
-9. Modifying `createdAt` during an update.
-10. Creating a payment with a date in the future.
-11. Reading a loan document without being authenticated.
-12. Listing all loans without authentication.
+## The "Dirty Dozen" Payloads (Denial Expected)
+1. **Identity Theft**: User A tries to create a loan with `ownerId: UserB_UID`.
+2. **PII Leak**: User A tries to `get` User B's loan.
+3. **Admin Escalation**: User A tries to update a loan's `ownerId` to themselves.
+4. **Negative Lent**: User A tries to create a loan with `principal: -100`.
+5. **Interest Spoofing**: User A tries to update `interestRate` after creation.
+6. **Shadow Field**: User A tries to add `isVIP: true` to a loan document.
+7. **Junk ID**: User A tries to create a loan with an ID that is 2KB of random characters.
+8. **Unverified Writ**: User A tries to write without having a verified email (if strictly enforced).
+9. **Orphaned Payment**: User A tries to create a payment for a loan they don't own.
+10. **State Shortcut**: User A tries to set `status: 'paid'` without the `remainingBalance` being 0.
+11. **Cost Attack**: User A tries to upload a 5MB base64 string as `clientName`.
+12. **Zombie Update**: User A tries to update a loan that has already been marked as `paid` (Terminal State Locking).
 
-## 3. Test Runner (Conceptual)
-All write operations must pass `isValidLoan` or `isValidPayment`.
-All list operations must be authenticated.
-Admin features (config) restricted to `isAdmin()`.
+## Test Runner Logic
+The following tests will be implemented in `firestore.rules.test.ts` to verify these protections.

@@ -7,6 +7,7 @@ export interface MoraConfig {
 
 export interface Loan {
   id: string;
+  ownerId: string;
   clientName: string;
   clientPhoto?: string;
   principal: number;
@@ -26,6 +27,7 @@ export interface Loan {
 export interface Payment {
   id: string;
   loanId: string;
+  ownerId: string;
   amount: number;
   date: string;
   notes?: string;

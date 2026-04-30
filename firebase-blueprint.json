@@ -5,67 +5,53 @@
       "description": "Represents a money loan granted to a client.",
       "type": "object",
       "properties": {
-        "clientName": { "type": "string" },
-        "principal": { "type": "number" },
-        "interestRate": { "type": "number" },
-        "totalToPay": { "type": "number" },
-        "remainingBalance": { "type": "number" },
-        "totalPaid": { "type": "number" },
-        "startDate": { "type": "string", "format": "date-time" },
-        "dueDate": { "type": "string", "format": "date-time" },
-        "status": { "type": "string", "enum": ["active", "overdue", "paid"] },
+        "ownerId": { "type": "string", "description": "UID of the user who owns the loan" },
+        "clientName": { "type": "string", "description": "Full name of the client" },
+        "clientPhoto": { "type": "string", "description": "Base64 string or URL of the client photo" },
+        "principal": { "type": "number", "description": "Initial loan amount" },
+        "interestRate": { "type": "number", "description": "Interest rate percentage" },
+        "totalToPay": { "type": "number", "description": "Total amount to be paid (principal + interest)" },
+        "remainingBalance": { "type": "number", "description": "Amount remaining to be fully paid" },
+        "totalPaid": { "type": "number", "description": "Total amount paid so far" },
+        "startDate": { "type": "string", "format": "date-time", "description": "Loan start date" },
+        "dueDate": { "type": "string", "format": "date-time", "description": "Loan due date" },
+        "status": { "type": "string", "enum": ["active", "overdue", "paid"], "description": "Current status of the loan" },
         "moraConfig": {
           "type": "object",
           "properties": {
             "type": { "type": "string", "enum": ["fixed", "daily"] },
             "value": { "type": "number" }
-          }
+          },
+          "required": ["type", "value"]
         },
+        "currentMoraCharge": { "type": "number", "description": "Accumulated late fees" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }
       },
-      "required": ["clientName", "principal", "interestRate", "totalToPay", "remainingBalance", "totalPaid", "startDate", "dueDate", "status"]
+      "required": ["clientName", "principal", "interestRate", "totalToPay", "remainingBalance", "totalPaid", "startDate", "dueDate", "status", "moraConfig", "createdAt", "updatedAt"]
     },
     "Payment": {
       "title": "Payment",
-      "description": "An installment or partial payment for a loan.",
+      "description": "Represents a single payment (abono) made towards a loan.",
       "type": "object",
       "properties": {
         "loanId": { "type": "string" },
+        "ownerId": { "type": "string" },
         "amount": { "type": "number" },
         "date": { "type": "string", "format": "date-time" },
         "notes": { "type": "string" }
       },
       "required": ["loanId", "amount", "date"]
-    },
-    "AppConfig": {
-      "title": "App Configuration",
-      "description": "Global settings for rates and mora logic.",
-      "type": "object",
-      "properties": {
-        "availableRates": { "type": "array", "items": { "type": "number" } },
-        "defaultMora": {
-          "type": "object",
-          "properties": {
-            "type": { "type": "string" },
-            "value": { "type": "number" }
-          }
-        }
-      }
     }
   },
   "firestore": {
     "/loans/{loanId}": {
       "schema": "Loan",
-      "description": "Principal collection of loans."
+      "description": "Main collection of loans."
     },
     "/loans/{loanId}/payments/{paymentId}": {
       "schema": "Payment",
-      "description": "Payments made toward a specific loan."
-    },
-    "/config/settings": {
-      "schema": "AppConfig",
-      "description": "Global configuration document."
+      "description": "Subcollection of payments for a specific loan."
     }
   }
 }

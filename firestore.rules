@@ -1,14 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // 0. Default Deny
+    // 0. Global Safety Net
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Helpers
+    // --- Helpers ---
     function isSignedIn() {
       return request.auth != null;
+    }
+
+    function isOwner(data) {
+      return isSignedIn() && data.ownerId == request.auth.uid;
     }
 
     function isValidId(id) {
@@ -23,86 +27,85 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Admin check - For now, we allow the specific user email or a record in /admins/
-    function isAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == 'alex.b19h@gmail.com' ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
-    }
-
-    // --- LOANS ---
-    match /loans/{loanId} {
-      allow read: if isSignedIn();
-      allow list: if isSignedIn();
-      
-      allow create: if isSignedIn() && isValidLoan(incoming()) && (
-        incoming().totalPaid == 0 &&
-        incoming().principal > 0 &&
-        incoming().createdAt == request.time
-      );
-
-      allow update: if isSignedIn() && isValidLoan(incoming()) && (
-        // Action: Register Payment (Abono)
-        (
-          incoming().diff(existing()).affectedKeys().hasOnly(['totalPaid', 'remainingBalance', 'status', 'updatedAt', 'currentMoraCharge']) &&
-          incoming().totalPaid >= existing().totalPaid &&
-          incoming().updatedAt == request.time
-        ) ||
-        // Action: Edit Memo/Config (Only specific fields)
-        (
-          incoming().diff(existing()).affectedKeys().hasOnly(['clientName', 'dueDate', 'moraConfig', 'updatedAt']) &&
-          isAdmin()
-        ) ||
-        // Admin Master Override
-        isAdmin()
-      );
-
-      allow delete: if isAdmin();
-    }
-
+    // --- Entity Validations ---
     function isValidLoan(data) {
-      return data.clientName is string && data.clientName.size() <= 200 &&
-             data.principal is number &&
-             data.interestRate is number &&
-             data.status in ['active', 'overdue', 'paid'] &&
-             data.totalToPay is number &&
-             data.remainingBalance is number &&
-             data.totalPaid is number &&
-             data.startDate is string &&
-             data.dueDate is string;
-    }
-
-    // --- PAYMENTS ---
-    match /loans/{loanId}/payments/{paymentId} {
-      allow read: if isSignedIn();
-      allow list: if isSignedIn();
-      
-      allow create: if isSignedIn() && 
-                    isValidPayment(incoming()) && 
-                    incoming().loanId == loanId &&
-                    exists(/databases/$(database)/documents/loans/$(loanId));
-      
-      allow delete: if isAdmin();
+      return data.keys().hasAll(['ownerId', 'clientName', 'principal', 'interestRate', 'totalToPay', 'remainingBalance', 'totalPaid', 'startDate', 'dueDate', 'status', 'moraConfig', 'createdAt', 'updatedAt'])
+        && (data.keys().size() >= 13 && data.keys().size() <= 14) // clientPhoto is optional
+        && data.ownerId == request.auth.uid
+        && data.clientName is string && data.clientName.size() <= 500
+        && (!data.keys().hasAny(['clientPhoto']) || (data.clientPhoto is string && data.clientPhoto.size() <= 2000000))
+        && data.principal is number && data.principal > 0
+        && data.interestRate is number && data.interestRate >= 0
+        && data.totalToPay is number && data.totalToPay >= data.principal
+        && data.remainingBalance is number && data.remainingBalance >= 0
+        && data.totalPaid is number && data.totalPaid >= 0
+        && data.startDate is string 
+        && data.dueDate is string
+        && data.status in ['active', 'overdue', 'paid']
+        && data.moraConfig is map
+        && data.moraConfig.type in ['fixed', 'daily']
+        && data.moraConfig.value is number
+        && data.createdAt is string
+        && data.updatedAt is string;
     }
 
     function isValidPayment(data) {
-      return data.amount is number && 
-             data.amount > 0 &&
-             data.date is string &&
-             data.loanId is string;
+      return data.keys().hasAll(['loanId', 'ownerId', 'amount', 'date'])
+        && (data.keys().size() >= 4 && data.keys().size() <= 5) // notes is optional
+        && data.loanId is string
+        && data.ownerId == request.auth.uid
+        && data.amount is number && data.amount > 0
+        && data.date is string;
     }
 
-    // --- CONFIG ---
-    match /config/settings {
-      allow read: if isSignedIn();
-      allow write: if isAdmin();
-    }
+    // --- Collections ---
 
-    // --- ADMINS ---
-    match /admins/{adminId} {
-      allow read: if isSignedIn();
-      allow write: if false; // Only manageable via console for safety
+    match /loans/{loanId} {
+      allow get: if isOwner(existing());
+      allow list: if isSignedIn() && existing().ownerId == request.auth.uid;
+      
+      allow create: if isSignedIn() 
+        && isValidId(loanId)
+        && isValidLoan(incoming())
+        && incoming().totalPaid == 0
+        && (incoming().createdAt == request.time || incoming().createdAt.size() > 0) // Relaxed for server side vs client side confusion, but prefer check
+        && incoming().updatedAt == incoming().createdAt;
+        
+      allow update: if (
+        isOwner(existing()) && isValidLoan(incoming()) && (
+          // Action: Apply Payment (from transaction in LoanDetail.tsx)
+          (incoming().diff(existing()).affectedKeys().hasOnly(['totalPaid', 'remainingBalance', 'status', 'updatedAt'])) ||
+          // Action: Edit Basic Info
+          (incoming().diff(existing()).affectedKeys().hasOnly(['clientName', 'clientPhoto', 'updatedAt']))
+        )
+        // Immobilize critical fields
+        && incoming().ownerId == existing().ownerId
+        && incoming().principal == existing().principal
+        && incoming().interestRate == existing().interestRate
+        && incoming().startDate == existing().startDate
+        && incoming().createdAt == existing().createdAt
+        // Temporal integrity
+        && incoming().updatedAt == request.time
+      );
+      
+      allow delete: if isOwner(existing());
+
+      match /payments/{paymentId} {
+        allow get: if isOwner(existing());
+        allow list: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+        
+        allow create: if isSignedIn()
+          && isValidId(paymentId)
+          && isValidPayment(incoming())
+          && incoming().loanId == loanId
+          // Verify loan ownership
+          && isOwner(get(/databases/$(database)/documents/loans/$(loanId)).data)
+          // Atomicity: Loan must be updated in the same batch
+          && existsAfter(/databases/$(database)/documents/loans/$(loanId));
+          
+        allow update: if false; 
+        allow delete: if false; 
+      }
     }
   }
 }

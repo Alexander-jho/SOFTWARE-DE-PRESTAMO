@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { Loan, LoanStatus } from '../types';
 import { formatCurrency, formatDate, cn } from '../lib/utils';
 import { Search, Filter, ChevronRight, Plus, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
+
+import { useAuth } from '../context/AuthContext';
 
 const STATUS_LABELS: Record<LoanStatus, { label: string, color: string, bg: string }> = {
   active: { label: 'Activo', color: 'text-blue-700', bg: 'bg-blue-100' },
@@ -14,13 +16,20 @@ const STATUS_LABELS: Record<LoanStatus, { label: string, color: string, bg: stri
 };
 
 export function LoanList() {
+  const { user } = useAuth();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<LoanStatus | 'all'>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'loans'), orderBy('createdAt', 'desc'));
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'loans'), 
+      where('ownerId', '==', user.uid),
+      orderBy('createdAt', 'desc')
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loanData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -31,7 +40,7 @@ export function LoanList() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const filteredLoans = loans.filter(l => {
     const matchesSearch = l.clientName.toLowerCase().includes(searchTerm.toLowerCase());

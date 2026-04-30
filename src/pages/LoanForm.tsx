@@ -7,6 +7,7 @@ import { calculateTotalToPay } from '../lib/finance';
 import { ChevronLeft, Save, Info, Calendar, Camera, X } from 'lucide-react';
 import { addDays, format } from 'date-fns';
 import { CameraCapture } from '../components/CameraCapture';
+import { useAuth } from '../context/AuthContext';
 
 const DEFAULT_CONFIG: AppConfig = {
   availableRates: [6, 10, 20],
@@ -17,6 +18,7 @@ const DEFAULT_CONFIG: AppConfig = {
 export function LoanForm() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [config, setConfig] = useState<AppConfig>(DEFAULT_CONFIG);
   const [loading, setLoading] = useState(!!id);
   
@@ -35,6 +37,7 @@ export function LoanForm() {
 
   useEffect(() => {
     async function loadData() {
+      if (!user) return;
       // Load config
       const configDoc = await getDoc(doc(db, 'config', 'settings'));
       if (configDoc.exists()) {
@@ -68,15 +71,16 @@ export function LoanForm() {
       }
     }
     loadData();
-  }, [id]);
+  }, [id, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.clientName || formData.principal <= 0) return;
+    if (!formData.clientName || formData.principal <= 0 || !user) return;
 
     const totalToPay = calculateTotalToPay(formData.principal, formData.interestRate);
     
     const loanData: any = {
+      ownerId: user.uid,
       clientName: formData.clientName,
       clientPhoto: formData.clientPhoto,
       principal: Number(formData.principal),

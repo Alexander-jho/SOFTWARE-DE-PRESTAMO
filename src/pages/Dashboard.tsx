@@ -1,18 +1,26 @@
 import { useEffect, useState } from 'react';
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db, auth } from '../lib/firebase';
 import { Loan } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
 import { ArrowUpRight, ArrowDownRight, Users, Activity, Clock, CheckCircle } from 'lucide-react';
 import { motion } from 'motion/react';
 import { syncLoanStatus } from '../lib/finance';
 
+import { useAuth } from '../context/AuthContext';
+
 export function Dashboard() {
+  const { user } = useAuth();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const q = query(collection(db, 'loans'));
+    if (!user) return;
+
+    const q = query(
+      collection(db, 'loans'),
+      where('ownerId', '==', user.uid)
+    );
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const loanData = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -30,7 +38,7 @@ export function Dashboard() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   const stats = {
     totalLent: loans.reduce((acc, l) => acc + l.principal, 0),
