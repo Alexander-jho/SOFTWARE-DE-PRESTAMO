@@ -1,0 +1,71 @@
+{
+  "entities": {
+    "Loan": {
+      "title": "Loan",
+      "description": "Represents a money loan granted to a client.",
+      "type": "object",
+      "properties": {
+        "clientName": { "type": "string" },
+        "principal": { "type": "number" },
+        "interestRate": { "type": "number" },
+        "totalToPay": { "type": "number" },
+        "remainingBalance": { "type": "number" },
+        "totalPaid": { "type": "number" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "dueDate": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["active", "overdue", "paid"] },
+        "moraConfig": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "enum": ["fixed", "daily"] },
+            "value": { "type": "number" }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["clientName", "principal", "interestRate", "totalToPay", "remainingBalance", "totalPaid", "startDate", "dueDate", "status"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "An installment or partial payment for a loan.",
+      "type": "object",
+      "properties": {
+        "loanId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" }
+      },
+      "required": ["loanId", "amount", "date"]
+    },
+    "AppConfig": {
+      "title": "App Configuration",
+      "description": "Global settings for rates and mora logic.",
+      "type": "object",
+      "properties": {
+        "availableRates": { "type": "array", "items": { "type": "number" } },
+        "defaultMora": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string" },
+            "value": { "type": "number" }
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/loans/{loanId}": {
+      "schema": "Loan",
+      "description": "Principal collection of loans."
+    },
+    "/loans/{loanId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Payments made toward a specific loan."
+    },
+    "/config/settings": {
+      "schema": "AppConfig",
+      "description": "Global configuration document."
+    }
+  }
+}

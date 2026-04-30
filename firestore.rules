@@ -1,0 +1,108 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Admin check - For now, we allow the specific user email or a record in /admins/
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'alex.b19h@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // --- LOANS ---
+    match /loans/{loanId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      
+      allow create: if isSignedIn() && isValidLoan(incoming()) && (
+        incoming().totalPaid == 0 &&
+        incoming().principal > 0 &&
+        incoming().createdAt == request.time
+      );
+
+      allow update: if isSignedIn() && isValidLoan(incoming()) && (
+        // Action: Register Payment (Abono)
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['totalPaid', 'remainingBalance', 'status', 'updatedAt', 'currentMoraCharge']) &&
+          incoming().totalPaid >= existing().totalPaid &&
+          incoming().updatedAt == request.time
+        ) ||
+        // Action: Edit Memo/Config (Only specific fields)
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['clientName', 'dueDate', 'moraConfig', 'updatedAt']) &&
+          isAdmin()
+        ) ||
+        // Admin Master Override
+        isAdmin()
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    function isValidLoan(data) {
+      return data.clientName is string && data.clientName.size() <= 200 &&
+             data.principal is number &&
+             data.interestRate is number &&
+             data.status in ['active', 'overdue', 'paid'] &&
+             data.totalToPay is number &&
+             data.remainingBalance is number &&
+             data.totalPaid is number &&
+             data.startDate is string &&
+             data.dueDate is string;
+    }
+
+    // --- PAYMENTS ---
+    match /loans/{loanId}/payments/{paymentId} {
+      allow read: if isSignedIn();
+      allow list: if isSignedIn();
+      
+      allow create: if isSignedIn() && 
+                    isValidPayment(incoming()) && 
+                    incoming().loanId == loanId &&
+                    exists(/databases/$(database)/documents/loans/$(loanId));
+      
+      allow delete: if isAdmin();
+    }
+
+    function isValidPayment(data) {
+      return data.amount is number && 
+             data.amount > 0 &&
+             data.date is string &&
+             data.loanId is string;
+    }
+
+    // --- CONFIG ---
+    match /config/settings {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // --- ADMINS ---
+    match /admins/{adminId} {
+      allow read: if isSignedIn();
+      allow write: if false; // Only manageable via console for safety
+    }
+  }
+}
