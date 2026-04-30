@@ -3,6 +3,7 @@ import {
   onAuthStateChanged, 
   signInWithPopup, 
   signInWithRedirect,
+  getRedirectResult,
   GoogleAuthProvider, 
   signOut, 
   User 
@@ -24,6 +25,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Handle redirect result
+    getRedirectResult(auth).catch(err => {
+      console.error("Redirect Result Error:", err);
+    });
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
@@ -43,13 +49,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const loginRedirect = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithRedirect(auth, provider);
+    try {
+      await signInWithRedirect(auth, provider);
+    } catch (error: any) {
+      console.error("Redirect Login Error:", error);
+      throw error;
+    }
   };
 
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginRedirect, logout }}>
       {children}
     </AuthContext.Provider>
   );

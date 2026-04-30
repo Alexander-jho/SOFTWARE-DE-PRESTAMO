@@ -67,6 +67,8 @@ export function Login() {
               <br />
               {errorInfo.code === 'auth/popup-closed-by-user' 
                 ? 'La ventana se cerró antes de terminar. ¿Prefieres usar redirección?' 
+                : errorInfo.code === 'auth/unauthorized-domain'
+                ? `Este dominio (${window.location.hostname}) no está autorizado en Firebase. Agrégalo en la consola de Firebase > Authentication > Settings > Authorized domains.`
                 : 'Inténtalo de nuevo o usa el método alternativo.'}
             </p>
           </motion.div>
