@@ -24,11 +24,16 @@ export function Login() {
       await login();
       // The useEffect above will handle redirection
     } catch (err: any) {
-      console.error(err);
+      console.error("Login Error:", err.code, err.message);
       if (err.code === 'auth/popup-blocked') {
         setError('El navegador bloqueó la ventana de inicio de sesión. Por favor, permite las ventanas emergentes.');
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        // Just a notice, not a scary error
+        setError('Cerraste la ventana antes de completar el inicio de sesión.');
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        // Ignore this as it's triggered by rapid double clicking
       } else {
-        setError('Ocurrió un error al intentar iniciar sesión. Inténtalo de nuevo.');
+        setError('Ocurrió un error al intentar iniciar sesión. Revisa tu conexión.');
       }
     } finally {
       setIsLoggingIn(false);
