@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import { 
   onAuthStateChanged, 
   signInWithPopup, 
+  signInWithRedirect,
   GoogleAuthProvider, 
   signOut, 
   User 
@@ -12,6 +13,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: () => Promise<void>;
+  loginRedirect: () => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -31,7 +33,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (error: any) {
+      console.error("Auth Error:", error);
+      throw error;
+    }
+  };
+
+  const loginRedirect = async () => {
+    const provider = new GoogleAuthProvider();
+    await signInWithRedirect(auth, provider);
   };
 
   const logout = () => signOut(auth);
