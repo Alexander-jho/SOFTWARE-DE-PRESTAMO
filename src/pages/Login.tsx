@@ -29,25 +29,21 @@ export function Login() {
     
     try {
       if (isRegistering) {
-        // Explicit registration
         await signUpWithEmail(email, password);
       } else {
-        // Smart Auth: Try sign in, if not found or invalid, try to create (unified flow)
+        // Smart Auth: Try sign in, if fails with invalid-credential/user-not-found, try to auto-create
         try {
           await signInWithEmail(email, password);
         } catch (signInErr: any) {
-          // If the error suggests the user might not exist, try creating the account
-          // Note: invalid-credential often covers both user-not-found and wrong-password
-          if (signInErr.code === 'auth/user-not-found' || signInErr.code === 'auth/invalid-credential') {
+          if (signInErr.code === 'auth/invalid-credential' || signInErr.code === 'auth/user-not-found') {
             try {
+              // Try to create account automatically if it doesn't exist
               await signUpWithEmail(email, password);
             } catch (signUpErr: any) {
-              // If signup fails with email-already-in-use, it means the password was actually wrong
+              // If signup fails because email exists, then it was a wrong password for an existing account
               if (signUpErr.code === 'auth/email-already-in-use') {
-                setError('Contraseña incorrecta para esta cuenta. Por favor verifica tus datos.');
-                return;
+                throw signInErr; // Re-throw the original invalid-credential error
               }
-              // Otherwise, throw the original sign-in error or the signup error
               throw signUpErr;
             }
           } else {
@@ -56,15 +52,36 @@ export function Login() {
         }
       }
     } catch (err: any) {
-      console.error("Auth Error:", err.code);
-      let msg = 'Ocurrió un error inesperado';
-      if (err.code === 'auth/user-not-found') msg = 'Usuario no encontrado';
-      if (err.code === 'auth/wrong-password') msg = 'Contraseña incorrecta';
-      if (err.code === 'auth/invalid-email') msg = 'Email inválido';
-      if (err.code === 'auth/email-already-in-use') msg = 'El email ya está registrado';
-      if (err.code === 'auth/weak-password') msg = 'La contraseña debe tener al menos 6 caracteres';
-      if (err.code === 'auth/invalid-credential') msg = 'Email o contraseña incorrectos.';
-      if (err.code === 'auth/operation-not-allowed') msg = 'El inicio de sesión con email no está habilitado en Firebase. Actívalo en la consola.';
+      let msg = 'Error inesperado';
+      
+      switch (err.code) {
+        case 'auth/user-not-found':
+          msg = 'No se encontró la cuenta. ¿Deseas registrarte?';
+          break;
+        case 'auth/wrong-password':
+          msg = 'Contraseña incorrecta para este correo.';
+          break;
+        case 'auth/invalid-email':
+          msg = 'El formato del correo electrónico no es válido.';
+          break;
+        case 'auth/email-already-in-use':
+          msg = 'Este correo ya tiene una cuenta asociada. Intenta iniciar sesión.';
+          break;
+        case 'auth/weak-password':
+          msg = 'La contraseña debe ser más fuerte (mínimo 6 caracteres).';
+          break;
+        case 'auth/invalid-credential':
+          msg = 'Credenciales no válidas. Si no tienes cuenta, intenta registrarte.';
+          break;
+        case 'auth/operation-not-allowed':
+          msg = 'El inicio de sesión por correo no está habilitado.';
+          break;
+        case 'auth/too-many-requests':
+          msg = 'Cuenta bloqueada temporalmente por demasiados intentos fallidos.';
+          break;
+        default:
+          msg = `Error: ${err.code || 'Inténtalo de nuevo'}`;
+      }
       setError(msg);
     } finally {
       setIsSubmitting(false);

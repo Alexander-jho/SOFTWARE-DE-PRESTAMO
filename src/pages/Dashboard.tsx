@@ -3,9 +3,11 @@ import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { Loan } from '../types';
 import { formatCurrency, cn } from '../lib/utils';
-import { ArrowUpRight, ArrowDownRight, Users, Activity, Clock, CheckCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Users, Activity, Clock, CheckCircle, FileText, Download } from 'lucide-react';
 import { motion } from 'motion/react';
 import { syncLoanStatus } from '../lib/finance';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 import { useAuth } from '../context/AuthContext';
 
@@ -49,6 +51,58 @@ export function Dashboard() {
     expectedTotal: loans.reduce((acc, l) => acc + l.totalToPay, 0),
   };
 
+  const generateReport = () => {
+    const doc = new jsPDF();
+    const now = new Date().toLocaleString();
+
+    // Header
+    doc.setFontSize(22);
+    doc.text('Reporte Financiero Consolidado', 14, 20);
+    doc.setFontSize(10);
+    doc.text(`Generado: ${now}`, 14, 28);
+    doc.text(`Administrador: ${user?.email}`, 14, 33);
+
+    // Summary Table
+    autoTable(doc, {
+      startY: 40,
+      head: [['Concepto', 'Monto']],
+      body: [
+        ['Total Prestado', formatCurrency(stats.totalLent)],
+        ['Total Recuperado', formatCurrency(stats.totalRecovered)],
+        ['Ganancias Estimadas', formatCurrency(stats.totalProfit)],
+        ['Saldo Pendiente', formatCurrency(stats.expectedTotal - stats.totalRecovered)],
+        ['Préstamos Activos', stats.activeLoans.toString()],
+        ['Préstamos Vencidos', stats.overdueLoans.toString()],
+      ],
+      theme: 'striped',
+      headStyles: { fillColor: [37, 99, 235] }
+    });
+
+    // Loans List
+    doc.setFontSize(16);
+    doc.text('Detalle de Préstamos Activos y Vencidos', 14, (doc as any).lastAutoTable.finalY + 15);
+
+    const loanRows = loans
+      .filter(l => l.status !== 'paid')
+      .map(l => [
+        l.clientName,
+        formatCurrency(l.principal),
+        formatCurrency(l.remainingBalance),
+        l.status === 'overdue' ? 'Vencido' : 'Activo',
+        new Date(l.dueDate).toLocaleDateString()
+      ]);
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 20,
+      head: [['Cliente', 'Principal', 'Saldo Pendiente', 'Estado', 'Vencimiento']],
+      body: loanRows,
+      theme: 'grid',
+      headStyles: { fillColor: [100, 116, 139] }
+    });
+
+    doc.save(`reporte-financiero-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
@@ -66,9 +120,18 @@ export function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard Financiero</h2>
-        <p className="text-gray-500 mt-1">Resumen del estado actual de tus préstamos.</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Dashboard Financiero</h2>
+          <p className="text-gray-500 mt-1">Resumen del estado actual de tus préstamos.</p>
+        </div>
+        <button
+          onClick={generateReport}
+          className="flex items-center justify-center gap-2 px-6 py-3 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-all active:scale-95 shadow-lg shadow-gray-200"
+        >
+          <FileText className="w-5 h-5" />
+          Generar Reporte PDF
+        </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

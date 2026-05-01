@@ -62,21 +62,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUpWithEmail = async (email: string, pass: string) => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, pass);
-    } catch (error) {
-      console.error("SignUp Error:", error);
-      throw error;
-    }
+    await createUserWithEmailAndPassword(auth, email, pass);
   };
 
   const signInWithEmail = async (email: string, pass: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, pass);
-    } catch (error) {
-      console.error("SignIn Error:", error);
-      throw error;
-    }
+    await signInWithEmailAndPassword(auth, email, pass);
   };
 
   const logout = () => signOut(auth);
