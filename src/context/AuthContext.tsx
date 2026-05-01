@@ -4,7 +4,9 @@ import {
   signInWithPopup, 
   signInWithRedirect,
   getRedirectResult,
-  GoogleAuthProvider, 
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   signOut, 
   User 
 } from 'firebase/auth';
@@ -15,6 +17,8 @@ interface AuthContextType {
   loading: boolean;
   login: () => Promise<void>;
   loginRedirect: () => Promise<void>;
+  signInWithEmail: (email: string, pass: string) => Promise<void>;
+  signUpWithEmail: (email: string, pass: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -57,10 +61,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const signUpWithEmail = async (email: string, pass: string) => {
+    try {
+      await createUserWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      console.error("SignUp Error:", error);
+      throw error;
+    }
+  };
+
+  const signInWithEmail = async (email: string, pass: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch (error) {
+      console.error("SignIn Error:", error);
+      throw error;
+    }
+  };
+
   const logout = () => signOut(auth);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginRedirect, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, loginRedirect, logout, signInWithEmail, signUpWithEmail }}>
       {children}
     </AuthContext.Provider>
   );

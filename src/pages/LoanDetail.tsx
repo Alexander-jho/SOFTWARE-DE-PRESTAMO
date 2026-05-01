@@ -90,7 +90,7 @@ export function LoanDetail() {
         const paymentRef = doc(collection(db, `loans/${id}/payments`));
         transaction.set(paymentRef, {
           loanId: id,
-          ownerId: auth.currentUser?.uid,
+          ownerId: user?.uid,
           amount: paymentAmount,
           date: new Date().toISOString(),
           notes: paymentNotes
